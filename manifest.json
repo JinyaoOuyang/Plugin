@@ -7,7 +7,8 @@
   "editorType": ["figma"],
   "networkAccess": {
     "allowedDomains": [
-      "https://api.remove.bg"
+      "https://api.remove.bg",
+      "https://image.pollinations.ai"
     ]
   }
 }

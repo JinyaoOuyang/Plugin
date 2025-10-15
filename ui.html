@@ -44,6 +44,12 @@
     </div>
 
     <div class="row">
+      <label>Background Prompt (AI)</label>
+      <input id="bgPrompt" type="text" placeholder="e.g. modern kitchen, soft daylight, clean surfaces" />
+      <small>Used to generate backgrounds for lifestyle-style images.</small>
+    </div>
+
+    <div class="row">
       <label>Canvas</label>
       <div class="grid">
         <button id="arrange">Arrange 6 on Canvas</button>
@@ -101,7 +107,8 @@
 
       document.getElementById('genSix').onclick = function () {
         var sizePx = Number(document.getElementById('sizePx').value) || 2000;
-        parent.postMessage({ pluginMessage: { type: 'generateSix', payload: { sizePx: sizePx } } }, '*');
+        var bgPrompt = document.getElementById('bgPrompt').value || '';
+        parent.postMessage({ pluginMessage: { type: 'generateSix', payload: { sizePx: sizePx, bgPrompt: bgPrompt } } }, '*');
         log('Generating 6 listing images…');
       };
 
@@ -198,6 +205,12 @@
           return;
         }
 
+        if (msg.type === 'arranged') {
+          var id = msg.payload && msg.payload.id;
+          log('Arranged on canvas. Parent frame ID: ' + (id || 'unknown'));
+          return;
+        }
+
         if (msg.type === 'bridgeRequest') {
           var data = msg.payload || {};
           var id = data.id;
@@ -230,6 +243,23 @@
                 var ab = await res.arrayBuffer();
                 var outBytes = Array.from(new Uint8Array(ab));
                 parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: true, data: { ok: true, bytes: outBytes } } } }, '*');
+              } catch (e) {
+                parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: false, error: String(e && e.message ? e.message : e) } } }, '*');
+              }
+            })();
+            return;
+          }
+
+          if (method === 'fetchBytesFromUrl') {
+            (async function(){
+              try {
+                var url = String(payload && payload.url || '');
+                if (!url) throw new Error('Missing url');
+                var res = await fetch(url, { method: 'GET' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                var ab = await res.arrayBuffer();
+                var bytes = Array.from(new Uint8Array(ab));
+                parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: true, data: { ok: true, bytes: bytes } } } }, '*');
               } catch (e) {
                 parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: false, error: String(e && e.message ? e.message : e) } } }, '*');
               }
