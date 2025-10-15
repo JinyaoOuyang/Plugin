@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Amazon Listing Image Generator</title>
+    <style>
+      body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; margin: 12px; }
+      .row { margin-bottom: 10px; }
+      label { display: block; margin-bottom: 4px; font-weight: 600; }
+      input[type="text"], input[type="number"] { width: 100%; padding: 6px; box-sizing: border-box; }
+      button { padding: 8px 10px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
+      button.primary { background: #18a0fb; color: #fff; border: none; }
+      small { color: #666; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .log { height: 120px; overflow: auto; border: 1px solid #eee; padding: 6px; border-radius: 6px; background: #fafafa; }
+      .ids { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <label>remove.bg API Key</label>
+      <input id="apiKey" type="text" placeholder="rb-xxxxxxxxxxxxxxxx" />
+      <button id="saveKey" class="primary">Save API Key</button>
+      <small>Stored locally per user via Figma client storage.</small>
+    </div>
+
+    <div class="row">
+      <label>Main Image Size (px)</label>
+      <div class="grid">
+        <input id="sizePx" type="number" value="2000" min="1000" step="10" />
+        <button id="genMain" class="primary">Generate Main Image</button>
+      </div>
+      <small>Select a node (image) in canvas before generating.</small>
+    </div>
+
+    <div class="row">
+      <label>Generate Full Set</label>
+      <div class="grid">
+        <button id="genSix" class="primary">Generate 6 Listing Images</button>
+        <button id="exportAll">Export All (PNG)</button>
+      </div>
+      <small>Creates: Main, Lifestyle, Infographic, Features, Dimensions, In-Box.</small>
+    </div>
+
+    <div class="row">
+      <label>Canvas</label>
+      <div class="grid">
+        <button id="arrange">Arrange 6 on Canvas</button>
+      </div>
+      <small>Puts the six frames into a parent frame in a 3×2 grid.</small>
+    </div>
+
+    <div class="row">
+      <label>Export Single</label>
+      <div class="grid">
+        <button id="exportPng">Export Last (PNG)</button>
+        <button id="exportJpg">Export Last (JPG)</button>
+      </div>
+      <small>Exports the most recently generated frame.</small>
+    </div>
+
+    <div class="row">
+      <label>Log</label>
+      <div id="log" class="log"></div>
+    </div>
+
+    <div class="row">
+      <label>Generated Frame IDs</label>
+      <div id="ids" class="ids"></div>
+    </div>
+
+    <script>
+      var logEl = document.getElementById('log');
+      var idsEl = document.getElementById('ids');
+      var generatedFrameId = null;
+      var generatedFrameIds = [];
+
+      function log(line) {
+        var p = document.createElement('div');
+        p.textContent = line;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setIds(list) {
+        generatedFrameIds = list || [];
+        idsEl.textContent = generatedFrameIds.join(', ');
+      }
+
+      document.getElementById('saveKey').onclick = function () {
+        var key = document.getElementById('apiKey').value.trim();
+        parent.postMessage({ pluginMessage: { type: 'saveApiKey', payload: { key: key } } }, '*');
+      };
+
+      document.getElementById('genMain').onclick = function () {
+        var sizePx = Number(document.getElementById('sizePx').value) || 2000;
+        parent.postMessage({ pluginMessage: { type: 'generateMainImage', payload: { sizePx: sizePx } } }, '*');
+        log('Generating main image…');
+      };
+
+      document.getElementById('genSix').onclick = function () {
+        var sizePx = Number(document.getElementById('sizePx').value) || 2000;
+        parent.postMessage({ pluginMessage: { type: 'generateSix', payload: { sizePx: sizePx } } }, '*');
+        log('Generating 6 listing images…');
+      };
+
+      document.getElementById('exportAll').onclick = function () {
+        var sizePx = Number(document.getElementById('sizePx').value) || 2000;
+        if (!generatedFrameIds.length) return log('Nothing to export yet. Generate first.');
+        parent.postMessage({ pluginMessage: { type: 'exportAllGenerated', payload: { ids: generatedFrameIds, format: 'PNG', sizePx: sizePx } } }, '*');
+        log('Exporting all…');
+      };
+
+      document.getElementById('arrange').onclick = function () {
+        parent.postMessage({ pluginMessage: { type: 'arrangeSix' } }, '*');
+        log('Arranging on canvas…');
+      };
+
+      document.getElementById('exportPng').onclick = function () {
+        var sizePx = Number(document.getElementById('sizePx').value) || 2000;
+        if (!generatedFrameId) return log('Nothing to export yet. Generate first.');
+        parent.postMessage({ pluginMessage: { type: 'exportGenerated', payload: { id: generatedFrameId, format: 'PNG', sizePx: sizePx } } }, '*');
+      };
+
+      document.getElementById('exportJpg').onclick = function () {
+        var sizePx = Number(document.getElementById('sizePx').value) || 2000;
+        if (!generatedFrameId) return log('Nothing to export yet. Generate first.');
+        parent.postMessage({ pluginMessage: { type: 'exportGenerated', payload: { id: generatedFrameId, format: 'JPEG', sizePx: sizePx } } }, '*');
+      };
+
+      function downloadEntry(entry) {
+        var name = entry && entry.name;
+        var bytes = entry && entry.bytes;
+        if (!(name && bytes)) return;
+        var blob = new Blob([new Uint8Array(bytes)], { type: name.endsWith('.png') ? 'image/png' : 'image/jpeg' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+        log('Downloaded: ' + name);
+      }
+
+      function normalizeToUint8Array(arrLike) {
+        try {
+          if (arrLike instanceof Uint8Array) return arrLike;
+          if (Array.isArray(arrLike)) return new Uint8Array(arrLike);
+          if (arrLike && arrLike.buffer instanceof ArrayBuffer) return new Uint8Array(arrLike.buffer);
+        } catch (e) {}
+        return null;
+      }
+
+      function downloadAllSequential(entries, delayMs) {
+        var i = 0;
+        function next() {
+          if (i >= entries.length) { log('All downloads complete.'); return; }
+          downloadEntry(entries[i]);
+          i += 1;
+          setTimeout(next, delayMs);
+        }
+        next();
+      }
+
+      onmessage = function (event) {
+        var msg = event.data.pluginMessage;
+        if (!msg) return;
+        if (msg.type === 'saveApiKeyResult') {
+          log(msg.payload && msg.payload.ok ? 'API key saved.' : 'Failed to save API key.');
+          return;
+        }
+        if (msg.type === 'generatedFrameId') {
+          generatedFrameId = msg.payload ? msg.payload.id : null;
+          log('Main image created. You can now export.');
+          return;
+        }
+        if (msg.type === 'generatedFrameList') {
+          var ids = (msg.payload && msg.payload.ids) ? msg.payload.ids : [];
+          setIds(ids);
+          if (ids.length) generatedFrameId = ids[0];
+          log('6 images created. Ready to export all or arrange.');
+          return;
+        }
+        if (msg.type === 'error') {
+          var message = (msg.payload && msg.payload.message) ? msg.payload.message : 'unknown';
+          log('Error: ' + message);
+          return;
+        }
+        if (msg.type === 'exportDone') {
+          downloadEntry(msg.payload);
+          return;
+        }
+        if (msg.type === 'batchExportDone') {
+          var entries = (msg.payload && msg.payload.entries) ? msg.payload.entries : [];
+          if (!entries.length) { log('Nothing to download.'); return; }
+          downloadAllSequential(entries, 400);
+          return;
+        }
+
+        if (msg.type === 'bridgeRequest') {
+          var data = msg.payload || {};
+          var id = data.id;
+          var method = data.method;
+          var payload = data.data || {};
+
+          if (method === 'removeBg') {
+            (async function(){
+              try {
+                var apiKey = payload.apiKey;
+                var inputBytes = normalizeToUint8Array(payload.imageBytes);
+                if (!inputBytes) throw new Error('Invalid image bytes payload');
+
+                var formData = new FormData();
+                formData.append('image_file', new Blob([inputBytes], { type: 'image/png' }), 'input.png');
+                formData.append('size', 'auto');
+                formData.append('format', 'png');
+
+                var res = await fetch('https://api.remove.bg/v1.0/removebg', {
+                  method: 'POST',
+                  headers: { 'X-Api-Key': apiKey },
+                  body: formData
+                });
+                if (!res.ok) {
+                  var t = '';
+                  try { t = await res.text(); } catch (e) {}
+                  parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: false, error: 'remove.bg failed (' + res.status + '): ' + t } } }, '*');
+                  return;
+                }
+                var ab = await res.arrayBuffer();
+                var outBytes = Array.from(new Uint8Array(ab));
+                parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: true, data: { ok: true, bytes: outBytes } } } }, '*');
+              } catch (e) {
+                parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: false, error: String(e && e.message ? e.message : e) } } }, '*');
+              }
+            })();
+            return;
+          }
+
+          parent.postMessage({ pluginMessage: { type: 'bridgeResponse', payload: { id: id, ok: false, error: 'Unknown method: ' + method } } }, '*');
+        }
+      };
+    </script>
+  </body>
+  </html>

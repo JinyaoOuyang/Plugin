@@ -1,0 +1,13 @@
+{
+  "name": "Amazon Listing Image Generator",
+  "id": "amazon-listing-generator",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.remove.bg"
+    ]
+  }
+}
